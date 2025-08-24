@@ -2,25 +2,33 @@ package com.tnbook.tnbook.model.entity;
 
 import com.tnbook.tnbook.model.enums.AuthProvider;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 
+@Builder
 @Getter
 @Setter
+@AllArgsConstructor
 @NoArgsConstructor
 @Entity
 @Table(name = "users")
-public class User implements UserDetails {
+public class User implements UserDetails, OAuth2User {
+
+    // --- Security-only fields (not persisted) ---
+    @Transient
+    private Collection<? extends GrantedAuthority> authorities = List.of();
+    @Transient
+    private Map<String, Object> attributes = Collections.emptyMap();
+
+    // --- Persisted fields ---
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private Long id;
 
     @Column(unique = true, nullable = false)
     private String email;
@@ -43,11 +51,26 @@ public class User implements UserDetails {
     @Column(name = "verification_expiration")
     private LocalDateTime verificationExpiration;
 
-    public User (String email, String password, AuthProvider authProvider) {}
+    public User (String email, String password, AuthProvider authProvider) {
+        this.email = email;
+        this.password = password;
+        this.authProvider = authProvider;
+    }
+
+    public User(Long id, String email, String password, boolean enabled, AuthProvider authProvider, Collection<? extends GrantedAuthority> authorities) {
+        this.id = id;
+        this.email = email;
+        this.password = password;
+        this.enabled = enabled;
+        this.authProvider = authProvider;
+        this.authorities = authorities;
+    }
+
+    // --- UserDetails ---
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        return this.authorities;
     }
 
     @Override
@@ -79,4 +102,30 @@ public class User implements UserDetails {
     public boolean isEnabled() {
         return this.enabled;
     }
+
+    // --- OAuth2User ---
+
+    @Override
+    public Map<String, Object> getAttributes() {
+        return this.attributes;
+    }
+
+    @Override
+    public String getName() {
+        return email != null ? email : String.valueOf(id);
+    }
+
+    public static User create(User user, Map<String, Object> attributes) {
+        User copy = new User();
+        copy.setId(user.getId());
+        copy.setEmail(user.getEmail());
+        copy.setPassword(user.getPassword());
+        copy.setEnabled(user.isEnabled());
+        copy.setAuthProvider(user.getAuthProvider());
+        copy.setProviderId(user.getProviderId());
+        copy.setAuthorities(user.getAuthorities());
+        copy.setAttributes(attributes != null ? attributes : Collections.emptyMap());
+        return copy;
+    }
+
 }
